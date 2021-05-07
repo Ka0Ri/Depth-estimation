@@ -459,78 +459,53 @@ class VisionTransformer(nn.Module):
 
 
 ###########################-----Modifications from here----------------------------------------
+class UpSample(nn.Sequential):
+    def __init__(self, skip_input, output_features):
+        super(UpSample, self).__init__()
+        self.convA = nn.Conv2d(skip_input, output_features, kernel_size=3, stride=1, padding=1)
+        self.leakyreluA = nn.LeakyReLU(0.2)
+        self.convB = nn.Conv2d(output_features, output_features, kernel_size=3, stride=1, padding=1)
+        self.leakyreluB = nn.LeakyReLU(0.2)
 
-
-class VisionTransformerSimCLR(nn.Module):
-    def __init__(self, config):
-        super(VisionTransformerSimCLR, self).__init__()
-
-        model_config = config["ViT-model"]
-        sz = eval(config['dataset']['input_shape'])[0]
-        self.vis = model_config['vis']
-        self.k = model_config['n_patches']
-        
-        ViT_config = CONFIGS[model_config['ViTconfig']]
-        model = VisionTransformer(config= ViT_config, img_size=sz, num_classes=1, zero_head=True, vis=self.vis)
-
-        if(model_config['pretrained'] is not None):
-            model.load_from(np.load(model_config['pretrained']))
-        self.ft = model.transformer
-
-        # projection MLP
-        num_ftrs = ViT_config.hidden_size
-        self.projector = nn.Sequential(
-                nn.Linear(num_ftrs, num_ftrs),
-                nn.ReLU(inplace=True),
-                nn.Linear(num_ftrs, model_config['out_dim'])
-            )
-
-    def forward(self, x):
-     
-        h, att = self.ft(x)
-        
-        if(self.vis == True):
-            h = h[:, 1:]
-            att_mat = torch.stack(att)
-            att_mat = torch.mean(att_mat, dim=2)
-            
-            # To account for residual connections, we add an identity matrix to the
-            # attention matrix and re-normalize the weights.
-            residual_att = torch.eye(att_mat.size(2)).cuda(1)
-            aug_att_mat = att_mat + residual_att
-            aug_att_mat = aug_att_mat / aug_att_mat.sum(dim=-1, keepdim=True)
-           
-            # Recursively multiply the weight matrices
-            joint_attentions = torch.zeros(aug_att_mat.size()).cuda(1)
-            joint_attentions[0] = aug_att_mat[0]
-
-            for n in range(1, aug_att_mat.size(0)):
-                joint_attentions[n] = torch.matmul(aug_att_mat[n], joint_attentions[n-1])
-            
-            grid_size = int(np.sqrt(aug_att_mat.size(-1)))
-            v = torch.diagonal(joint_attentions[-1, :], dim1=1, dim2=2)
-            mask = v[:, 1:].reshape(-1, grid_size * grid_size)
-            mask = mask / mask.max(dim=1, keepdim=True)[0]
-
-            weights, _index = torch.topk(mask, k=self.k, largest=True, dim=-1)
-            
-            for i in range(mask.size(0)):
-                mask[i, mask[i] < weights[i, -1]] = 0.01
-           
-        
-            h = torch.cat([torch.index_select(a, 0, i).unsqueeze(0) for a, i in zip(h, _index) ])
-            h = torch.mean(h * weights.unsqueeze(-1), dim=1)
-           
-            x = F.normalize(self.projector(h), dim=1)
-            
-            return h, x
-
+    def forward(self, x, concat_with=None):
+        if concat_with is None:
+            up_x = F.interpolate(x, size=[x.size(2) * 2, x.size(3) * 2], mode='bilinear', align_corners=True)
+            return self.leakyreluB(self.convB(self.convA(up_x)))
         else:
+            up_x = F.interpolate(x, size=[concat_with.size(2), concat_with.size(3)], mode='bilinear', align_corners=True)
+            return self.leakyreluB(self.convB(self.convA(torch.cat([up_x, concat_with], dim=1))))
 
-            h = h[:, 0]
-            x = F.normalize(self.projector(h), dim=1)
-        
-            return h, x
+class Decoder(nn.Module):
+    def __init__(self, config):
+        super(Decoder, self).__init__()
+
+        num_features = config["num_features"]
+        decoder_width = config["decoder_width"]
+        features = int(num_features * decoder_width)
+
+        self.conv2 = nn.Conv2d(num_features, features, kernel_size=1, stride=1, padding=0)
+
+        self.up1 = UpSample(skip_input=features//1 + 256, output_features=features//2)
+        self.up2 = UpSample(skip_input=features//2 + 128,  output_features=features//4)
+        self.up3 = UpSample(skip_input=features//4 + 64,  output_features=features//8)
+        self.up4 = UpSample(skip_input=features//8 + 64,  output_features=features//16)
+        self.conv3 = nn.Conv2d(features//16, 1, kernel_size=3, stride=1, padding=1)
+
+    def forward(self, x, features=None):
+        if features is None:
+            x_d0 = self.conv2(F.relu(x))
+            x_d1 = self.up1(x_d0)
+            x_d2 = self.up2(x_d1)
+            x_d3 = self.up3(x_d2)
+            x_d4 = self.up4(x_d3)
+        else:
+            x_block0, x_block1, x_block2, x_block3, x_block4 = features[3], features[4], features[6], features[8], features[12]
+            x_d0 = self.conv2(F.relu(x_block4))
+            x_d1 = self.up1(x_d0, x_block3)
+            x_d2 = self.up2(x_d1, x_block2)
+            x_d3 = self.up3(x_d2, x_block1)
+            x_d4 = self.up4(x_d3, x_block0)
+        return self.conv3(x_d4)
 
 class VisionTransformerLinear(nn.Module):
     def __init__(self, config):
