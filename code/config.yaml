@@ -1,0 +1,35 @@
+model_name: 'ViT'
+batch_size: 32
+device: 'cuda:1'
+
+SimCLR:
+  epochs: 100
+  lr: 0.001
+  eval_every_n_epochs: 1
+  fine_tune_from: ""
+  log_every_n_steps: 50
+  weight_decay: 10e-6
+  linearloss: True
+  CRLloss: True
+  Tripletloss: True
+
+ViT-model:
+  ViTconfig: "ViT-B_16"
+  out_dim: 128
+  pretrained: "checkpoints/ViT-B_16.npz"
+  vis: True
+  fine_tune: True
+  n_patches: 25
+ 
+
+dataset:
+  s: 1
+  data_folder: '/home/vips/share/Vu/datasets/'
+  input_shape: (224, 224, 3)
+  num_workers: 4
+  valid_size: 0.05
+  name: "cub"
+  n_classes: 200
+  augment: "Gauss"
+  mperclass: 0
+  type: "2"

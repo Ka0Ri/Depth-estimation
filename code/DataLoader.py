@@ -53,18 +53,12 @@ class RandomChannelSwap(object):
 def loadZipToMem(zip_file):
     # Load zip file into memory
     print('Loading dataset zip file...', end='')
-
-
     input_zip = ZipFile(zip_file)
     data = {name: input_zip.read(name) for name in input_zip.namelist()}
-    nyu2_train = list(
-        (row.split(',') for row in (data['data/nyu2_train.csv']).decode("utf-8").split('\n') if len(row) > 0))
-
-
+    nyu2_train = list((row.split(',') for row in (data['data/nyu2_train.csv']).decode("utf-8").split('\n') if len(row) > 0))
     nyu2_train = shuffle(nyu2_train, random_state=0)
 
     # if True: nyu2_train = nyu2_train[:40]
-
     print('Loaded ({0}).'.format(len(nyu2_train)))
     return data, nyu2_train
 
@@ -159,11 +153,11 @@ def getTrainingTestingData(batch_size):
     data, nyu2_train = loadZipToMem('./dataset/nyu_data.zip')
     # data, nyu2_test = loadZipToMem('./dataset/nyu_test.zip')
 
-    transformed_training = depthDatasetMemory(data, nyu2_train, transform=getDefaultTrainTransform())
-    transformed_testing = depthDatasetMemory(data, nyu2_train, transform=getNoTransform())
+    transformed_train = depthDatasetMemory(data, nyu2_train, transform=getDefaultTrainTransform())
+    transformed_valid = depthDatasetMemory(data, nyu2_train, transform=getNoTransform())
     # transformed_testing = depthDatasetMemory(data, nyu2_test, transform=getNoTransform())
 
-    return DataLoader(transformed_training, batch_size, shuffle=True), DataLoader(transformed_testing, batch_size, shuffle=False)
+    return DataLoader(transformed_train, batch_size, shuffle=True), DataLoader(transformed_valid, batch_size, shuffle=False)
 
 
 def load_testloader(path, batch_size=1):
