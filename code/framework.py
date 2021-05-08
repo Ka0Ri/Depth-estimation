@@ -1,12 +1,51 @@
+from pytorch_lightning.core import datamodule
+from pytorch_lightning.core.lightning import LightningModule
+from pytorch_lightning import LightningDataModule, Trainer
 import torch
 import torch.nn as nn
 import numpy as np
 import torch.nn.functional as F
 from ViTmodel import VisionTransformer, CONFIGS
+from DataLoader import depthDatasetMemory, getDefaultTrainTransform, getNoTransform, loadZipToMem
+from torch.utils.data import random_split, DataLoader
+import os
+import yaml
+
+class NYUDataModule(LightningDataModule):
+
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+        self.data_config = config["dataset"]
+
+        size = eval(self.data_config["input_shape"])[:2]
+        self.no_transform = getNoTransform(size=size)
+        self.default_transform = getDefaultTrainTransform(size=size, p = self.data_config["channel_swap"])
+        
+    def setup(self, stage=None):
+
+        # Assign train/val datasets for use in dataloaders
+        data, nyu2_train = loadZipToMem(os.path.join(os.path.dirname(os.getcwd()), self.data_config['path']))
+        transformed_train = depthDatasetMemory(data, nyu2_train, transform=self.default_transform)
+        if stage == 'fit' or stage is None:
+            self.train, self.val = random_split(transformed_train, lengths=[40688, 10000])
+
+        # Assign test dataset for use in dataloader(s)
+        if stage == 'test' or stage is None:
+            # data, nyu2_test = loadZipToMem('./dataset/nyu_test.zip')
+            self.test = self.val
+           
+    def train_dataloader(self):
+        return DataLoader(self.train, batch_size=self.config['batch_size'])
+
+    def val_dataloader(self):
+        return DataLoader(self.val, batch_size=self.config['batch_size'])
+
+    def test_dataloader(self):
+        return DataLoader(self.test, batch_size=self.config['batch_size'])
 
 
 
-###########################-----Modifications from here----------------------------------------
 class UpSample(nn.Sequential):
     def __init__(self, skip_input, output_features):
         super(UpSample, self).__init__()
@@ -55,29 +94,69 @@ class Decoder(nn.Module):
             x_d4 = self.up4(x_d3, x_block0)
         return self.conv3(x_d4)
 
-class ViTDepthEstimation(nn.Module):
+
+class ViTDepthEstimation(LightningModule):
     def __init__(self, config):
         super(ViTDepthEstimation, self).__init__()
 
-        model_config = config["ViT-model"]
+        self.model_config = config["ViT-model"]
+        self.training_config = config["training"]
         sz = eval(config['dataset']['input_shape'])[0]
-        self.vis = model_config['vis']
-        self.k = model_config['n_patches']
         
         # Encoder
-        ViT_config = CONFIGS[model_config['ViTconfig']]
-        model = VisionTransformer(config= ViT_config, img_size=sz, num_classes=1, zero_head=True, vis=self.vis)
+        ViT_config = CONFIGS[self.model_config['ViTconfig']]
+        model = VisionTransformer(config= ViT_config, img_size=sz, num_classes=1, zero_head=True, vis=self.model_config['vis'])
 
-        if(model_config['pretrained'] is not None):
-            model.load_from(np.load(model_config['pretrained']))
+        if(self.model_config['pretrained'] is not None):
+            model.load_from(np.load(self.model_config['pretrained']))
         self.encoder = model.transformer
 
+        if(self.model_config['fine_tune'] == True):
+            for name, param in self.encoder.named_parameters():
+                param.requires_grad = False
+
         # Decoder
-        self.decoder = Decoder(config=model_config["Decoder"])
+        self.decoder = Decoder(config=self.model_config["Decoder"])
 
     def forward(self, x):
-     
         h, att = self.ft(x)
-        
+
+        print(att.size())
         
         return
+
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=self.training_config["lr"])
+
+    def MSE_loss(self, predictions, groundtruths):
+        return F.mse_loss(predictions, groundtruths)
+
+    def Custom_loss(self, predictions, groundtruths):
+        return
+
+    def training_step(self, train_batch, batch_idx):
+        x, groundtruths = train_batch['image'], train_batch['depth']
+        predictions = self.forward(x)
+        loss = self.cross_entropy_loss(predictions, groundtruths)
+        self.log('train_loss', loss)
+        return loss
+    
+    def validation_step(self, val_batch, batch_idx):
+        x, groundtruths = val_batch['image'], val_batch['depth']
+        predictions = self.forward(x)
+        loss = self.cross_entropy_loss(predictions, groundtruths)
+        self.log('val_loss', loss)
+
+
+
+if __name__ == '__main__':
+
+    config = yaml.load(open("config.yaml", "r"), Loader=yaml.FullLoader)
+
+    data_module = NYUDataModule(config=config)
+    model = ViTDepthEstimation(config=config)
+   
+    trainer = Trainer(gpus=1)
+    trainer.fit(model, data_module)
+
+    

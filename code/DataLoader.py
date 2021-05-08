@@ -8,6 +8,7 @@ import random
 from itertools import permutations
 from zipfile import ZipFile
 from sklearn.utils import shuffle
+import os
 
 ## NYUv2 detph dataset load
 
@@ -31,6 +32,21 @@ class RandomHorizontalFlip(object):
         if random.random() < 0.5:
             image = image.transpose(Image.FLIP_LEFT_RIGHT)
             depth = depth.transpose(Image.FLIP_LEFT_RIGHT)
+
+        return {'image': image, 'depth': depth}
+    
+class Resize(object):
+    def __init__(self, size):
+
+        self.size = size
+        self.indices = list(permutations(range(3), 3))
+
+    def __call__(self, sample):
+        image, depth = sample['image'], sample['depth']
+        if not _is_pil_image(image): raise TypeError('img should be PIL Image. Got {}'.format(type(image)))
+        if not _is_pil_image(depth): raise TypeError('img should be PIL Image. Got {}'.format(type(depth)))
+        image = image.resize(self.size)
+        depth = depth.resize(self.size)
 
         return {'image': image, 'depth': depth}
 
@@ -89,7 +105,7 @@ class ToTensor(object):
 
         image = self.to_tensor(image)
 
-        depth = depth.resize((320, 240))
+        # depth = depth.resize((320, 240))
 
         if self.is_test:
             depth = self.to_tensor(depth).float() / 1000
@@ -135,27 +151,30 @@ class ToTensor(object):
             return img
 
 
-def getNoTransform(is_test=False):
+def getNoTransform(size, is_test=False):
     return transforms.Compose([
+        Resize(size),
         ToTensor(is_test=is_test)
     ])
 
 
-def getDefaultTrainTransform():
+def getDefaultTrainTransform(size, p):
     return transforms.Compose([
         RandomHorizontalFlip(),
-        RandomChannelSwap(0.5),
+        RandomChannelSwap(p),
+        Resize(size),
         ToTensor()
     ])
 
 
 def getTrainingTestingData(batch_size):
-    data, nyu2_train = loadZipToMem('./dataset/nyu_data.zip')
+    data, nyu2_train = loadZipToMem(os.path.join(os.path.dirname(os.getcwd()), 'dataset/nyu_data.zip'))
     # data, nyu2_test = loadZipToMem('./dataset/nyu_test.zip')
 
     transformed_train = depthDatasetMemory(data, nyu2_train, transform=getDefaultTrainTransform())
     transformed_valid = depthDatasetMemory(data, nyu2_train, transform=getNoTransform())
     # transformed_testing = depthDatasetMemory(data, nyu2_test, transform=getNoTransform())
+    
 
     return DataLoader(transformed_train, batch_size, shuffle=True), DataLoader(transformed_valid, batch_size, shuffle=False)
 
@@ -170,6 +189,7 @@ if __name__ == '__main__':
     batch_size = 1
 
     train_loader, test_loader = getTrainingTestingData(batch_size=batch_size)
+    
 
     for i, sample_batched in enumerate(train_loader):
         print(sample_batched['image'].size(), sample_batched['depth'].size())
