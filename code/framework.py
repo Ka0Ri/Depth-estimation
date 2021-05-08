@@ -1,3 +1,4 @@
+from numpy.lib.utils import deprecate
 from pytorch_lightning.core import datamodule
 from pytorch_lightning.core.lightning import LightningModule
 from pytorch_lightning import LightningDataModule, Trainer
@@ -25,24 +26,29 @@ class NYUDataModule(LightningDataModule):
     def setup(self, stage=None):
 
         # Assign train/val datasets for use in dataloaders
+        n_used_data = self.data_config["n_used_data"] # number of actual data used
         data, nyu2_train = loadZipToMem(os.path.join(os.path.dirname(os.getcwd()), self.data_config['path']))
-        transformed_train = depthDatasetMemory(data, nyu2_train, transform=self.default_transform)
+        
         if stage == 'fit' or stage is None:
-            self.train, self.val = random_split(transformed_train, lengths=[40688, 10000])
+            transformed_train = depthDatasetMemory(data, nyu2_train[:n_used_data], transform=self.default_transform)
+            n_train_data = int(n_used_data * 0.7)
+            n_val_data = n_used_data - n_train_data
+            self.train, self.val = random_split(transformed_train, lengths=[n_train_data, n_val_data])
 
         # Assign test dataset for use in dataloader(s)
         if stage == 'test' or stage is None:
+            n_test_data = n_used_data + 5000
+            self.test = depthDatasetMemory(data, nyu2_train[n_used_data:n_test_data], transform=self.default_transform)
             # data, nyu2_test = loadZipToMem('./dataset/nyu_test.zip')
-            self.test = self.val
            
     def train_dataloader(self):
-        return DataLoader(self.train, batch_size=self.config['batch_size'])
+        return DataLoader(self.train, batch_size=self.config['batch_size'], num_workers=self.data_config['num_workers'])
 
     def val_dataloader(self):
-        return DataLoader(self.val, batch_size=self.config['batch_size'])
+        return DataLoader(self.val, batch_size=self.config['batch_size'], num_workers=self.data_config['num_workers'])
 
     def test_dataloader(self):
-        return DataLoader(self.test, batch_size=self.config['batch_size'])
+        return DataLoader(self.test, batch_size=self.config['batch_size'], num_workers=self.data_config['num_workers'])
 
 
 
@@ -72,10 +78,10 @@ class Decoder(nn.Module):
 
         self.conv2 = nn.Conv2d(num_features, features, kernel_size=1, stride=1, padding=0)
 
-        self.up1 = UpSample(skip_input=features//1 + 256, output_features=features//2)
-        self.up2 = UpSample(skip_input=features//2 + 128,  output_features=features//4)
-        self.up3 = UpSample(skip_input=features//4 + 64,  output_features=features//8)
-        self.up4 = UpSample(skip_input=features//8 + 64,  output_features=features//16)
+        self.up1 = UpSample(skip_input=features//1, output_features=features//2)
+        self.up2 = UpSample(skip_input=features//2,  output_features=features//4)
+        self.up3 = UpSample(skip_input=features//4,  output_features=features//8)
+        self.up4 = UpSample(skip_input=features//8,  output_features=features//16)
         self.conv3 = nn.Conv2d(features//16, 1, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x, features=None):
@@ -101,7 +107,7 @@ class ViTDepthEstimation(LightningModule):
 
         self.model_config = config["ViT-model"]
         self.training_config = config["training"]
-        sz = eval(config['dataset']['input_shape'])[0]
+        sz = eval(config['dataset']['input_shape'])[:2]
         
         # Encoder
         ViT_config = CONFIGS[self.model_config['ViTconfig']]
@@ -117,13 +123,23 @@ class ViTDepthEstimation(LightningModule):
 
         # Decoder
         self.decoder = Decoder(config=self.model_config["Decoder"])
+        self.fine_tune = nn.Conv2d(4, 1, kernel_size=1)
 
     def forward(self, x):
-        h, att = self.ft(x)
-
-        print(att.size())
+        h, att = self.encoder(x)
         
-        return
+        # h size = [batchsize, 1 + gridsize (e.g 512 = 32x16 -> gridsize = 32x32), 768]
+        h = h[:,1:] # remove class token
+        gridsize = h.shape[1]
+        h = h.reshape(-1, 768, 1, 1) #h size = [batchsize x gridsize, 768, 1, 1]
+        
+        up_samplings = self.decoder(h)
+        up_samplings = up_samplings.reshape(-1, gridsize, 16, 16)
+        up_samplings = up_samplings.reshape(-1, 1, 16 * int(gridsize ** 0.5), 16 * int(gridsize ** 0.5))
+
+        depths = self.fine_tune(torch.cat([up_samplings, x], dim=1))
+
+        return depths
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.training_config["lr"])
@@ -137,16 +153,15 @@ class ViTDepthEstimation(LightningModule):
     def training_step(self, train_batch, batch_idx):
         x, groundtruths = train_batch['image'], train_batch['depth']
         predictions = self.forward(x)
-        loss = self.cross_entropy_loss(predictions, groundtruths)
+        loss = self.MSE_loss(predictions, groundtruths)
         self.log('train_loss', loss)
         return loss
     
     def validation_step(self, val_batch, batch_idx):
         x, groundtruths = val_batch['image'], val_batch['depth']
         predictions = self.forward(x)
-        loss = self.cross_entropy_loss(predictions, groundtruths)
+        loss = self.MSE_loss(predictions, groundtruths)
         self.log('val_loss', loss)
-
 
 
 if __name__ == '__main__':
@@ -154,9 +169,10 @@ if __name__ == '__main__':
     config = yaml.load(open("config.yaml", "r"), Loader=yaml.FullLoader)
 
     data_module = NYUDataModule(config=config)
+
     model = ViTDepthEstimation(config=config)
-   
-    trainer = Trainer(gpus=1)
+
+    trainer = Trainer(gpus=1, max_epochs=config["training"]["epochs"])
     trainer.fit(model, data_module)
 
     

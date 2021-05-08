@@ -1,5 +1,5 @@
 model_name: 'ViT-depth estimation'
-device: 'cuda:1'
+device: 'cuda:0'
 batch_size: 32
 
 
@@ -9,17 +9,19 @@ training:
 
 ViT-model:
   ViTconfig: "ViT-B_16"
-  out_dim: 128
   pretrained: "checkpoints/ViT-B_16.npz"
   vis: False
   fine_tune: True
-  n_patches: 25
+  n_patches: 1
   Decoder:
+    num_features: 768
+    decoder_width: 1.0
 
  
 dataset:
   path: 'dataset/nyu_data.zip'
+  n_used_data: 20000
   test_path: 'dataset/nyu_test.zip'
-  input_shape: (512, 512, 3)
+  input_shape: (224, 224, 3)
   channel_swap: 0.5
-  num_workers: 4
+  num_workers: 20
