@@ -131,13 +131,16 @@ class ViTDepthEstimation(LightningModule):
         # h size = [batchsize, 1 + gridsize (e.g 512 = 32x16 -> gridsize = 32x32), 768]
         h = h[:,1:] # remove class token
         gridsize = h.shape[1]
+        sq_gridsize = int(gridsize ** 0.5)
         h = h.reshape(-1, 768, 1, 1) #h size = [batchsize x gridsize, 768, 1, 1]
         
-        up_samplings = self.decoder(h)
-        up_samplings = up_samplings.reshape(-1, gridsize, 16, 16)
-        up_samplings = up_samplings.reshape(-1, 1, 16 * int(gridsize ** 0.5), 16 * int(gridsize ** 0.5))
+        up_samplings = self.decoder(h) #up_samplings size = [batchsize x gridsize, 1, 16, 16]
+        up_samplings = up_samplings.reshape(-1, sq_gridsize, sq_gridsize, 16, 16)
+        up_samplings = up_samplings.transpose(2, 3).contiguous() #up_samplings size = [batchsize, grid, 16, grid, 16]
+        up_samplings = up_samplings.reshape(-1, 1, 16 * sq_gridsize, 16 * sq_gridsize)
 
         depths = self.fine_tune(torch.cat([up_samplings, x], dim=1))
+        ## sigmoid or tanh
 
         return depths
 
@@ -152,6 +155,7 @@ class ViTDepthEstimation(LightningModule):
 
     def training_step(self, train_batch, batch_idx):
         x, groundtruths = train_batch['image'], train_batch['depth']
+       
         predictions = self.forward(x)
         loss = self.MSE_loss(predictions, groundtruths)
         self.log('train_loss', loss)

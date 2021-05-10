@@ -105,9 +105,9 @@ class ToTensor(object):
 
         image = self.to_tensor(image)
 
-        # depth = depth.resize((320, 240))
-
         if self.is_test:
+            # depth normalize 0 - 1
+            # 1000으로 나누거나 곱하는 이유 : 실제 real meter
             depth = self.to_tensor(depth).float() / 1000
         else:
             depth = self.to_tensor(depth).float() * 1000
@@ -124,7 +124,6 @@ class ToTensor(object):
 
         if isinstance(pic, np.ndarray):
             img = torch.from_numpy(pic.transpose((2, 0, 1)))
-
             return img.float().div(255)
 
         # handle PIL Image
