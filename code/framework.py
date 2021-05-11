@@ -9,8 +9,12 @@ import torch.nn.functional as F
 from ViTmodel import VisionTransformer, CONFIGS
 from DataLoader import depthDatasetMemory, getDefaultTrainTransform, getNoTransform, loadZipToMem
 from torch.utils.data import random_split, DataLoader
+from torchvision.utils import make_grid, save_image
 import os
 import yaml
+from utils import *
+
+
 
 class NYUDataModule(LightningDataModule):
 
@@ -62,7 +66,7 @@ class UpSample(nn.Sequential):
 
     def forward(self, x, concat_with=None):
         if concat_with is None:
-            up_x = F.interpolate(x, size=[x.size(2) * 2, x.size(3) * 2], mode='bilinear', align_corners=True)
+            up_x = F.interpolate(x, size=[x.size(2) * 2 , x.size(3) * 2], mode='bilinear', align_corners=True)
             return self.leakyreluB(self.convB(self.convA(up_x)))
         else:
             up_x = F.interpolate(x, size=[concat_with.size(2), concat_with.size(3)], mode='bilinear', align_corners=True)
@@ -82,23 +86,22 @@ class Decoder(nn.Module):
         self.up2 = UpSample(skip_input=features//2,  output_features=features//4)
         self.up3 = UpSample(skip_input=features//4,  output_features=features//8)
         self.up4 = UpSample(skip_input=features//8,  output_features=features//16)
-        self.conv3 = nn.Conv2d(features//16, 1, kernel_size=3, stride=1, padding=1)
+        self.conv3 = nn.Conv2d(features//16 + 3, 1, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x, features=None):
+       
+        x_d0 = self.conv2(F.relu(x))
+        x_d1 = self.up1(x_d0)
+        x_d2 = self.up2(x_d1)
+        x_d3 = self.up3(x_d2)
+        x_d4 = self.up4(x_d3)
         if features is None:
-            x_d0 = self.conv2(F.relu(x))
-            x_d1 = self.up1(x_d0)
-            x_d2 = self.up2(x_d1)
-            x_d3 = self.up3(x_d2)
-            x_d4 = self.up4(x_d3)
+            return self.conv3(x_d4)
         else:
-            x_block0, x_block1, x_block2, x_block3, x_block4 = features[3], features[4], features[6], features[8], features[12]
-            x_d0 = self.conv2(F.relu(x_block4))
-            x_d1 = self.up1(x_d0, x_block3)
-            x_d2 = self.up2(x_d1, x_block2)
-            x_d3 = self.up3(x_d2, x_block1)
-            x_d4 = self.up4(x_d3, x_block0)
-        return self.conv3(x_d4)
+            cat1 = self.conv3(torch.cat([x_d4, features], dim=1))
+            return cat1
+           
+       
 
 
 class ViTDepthEstimation(LightningModule):
@@ -123,7 +126,8 @@ class ViTDepthEstimation(LightningModule):
 
         # Decoder
         self.decoder = Decoder(config=self.model_config["Decoder"])
-        self.fine_tune = nn.Conv2d(4, 1, kernel_size=1)
+        self.fine_tune = nn.Conv2d(4, 1, kernel_size=3, padding=1)
+
 
     def forward(self, x):
         h, att = self.encoder(x)
@@ -132,20 +136,47 @@ class ViTDepthEstimation(LightningModule):
         h = h[:,1:] # remove class token
         gridsize = h.shape[1]
         sq_gridsize = int(gridsize ** 0.5)
-        h = h.reshape(-1, 768, 1, 1) #h size = [batchsize x gridsize, 768, 1, 1]
+        h = h.transpose(1, 2).contiguous()
+        h = h.reshape(-1, 768, sq_gridsize, sq_gridsize) #h size = [batchsize, 768, sq_gridsize, sq_gridsize]
         
-        up_samplings = self.decoder(h) #up_samplings size = [batchsize x gridsize, 1, 16, 16]
-        up_samplings = up_samplings.reshape(-1, sq_gridsize, sq_gridsize, 16, 16)
-        up_samplings = up_samplings.transpose(2, 3).contiguous() #up_samplings size = [batchsize, grid, 16, grid, 16]
-        up_samplings = up_samplings.reshape(-1, 1, 16 * sq_gridsize, 16 * sq_gridsize)
+        up_samplings = self.decoder(h, x) #up_samplings size = [batchsize, 1, 16 * sq_gridsize, 16 * sq_gridsize]
+        
+        depths = up_samplings
 
-        depths = self.fine_tune(torch.cat([up_samplings, x], dim=1))
+        # depths = self.fine_tune())
         ## sigmoid or tanh
 
-        return depths
+        return torch.sigmoid(depths)
+
+    # def forward(self, x):
+    #     h, att = self.encoder(x)
+        
+    #     # h size = [batchsize, 1 + gridsize (e.g 512 = 32x16 -> gridsize = 32x32), 768]
+    #     h = h[:,1:] # remove class token
+    #     gridsize = h.shape[1]
+    #     sq_gridsize = int(gridsize ** 0.5)
+    #     h = h.reshape(-1, 768, 1, 1) #h size = [batchsize x gridsize, 768, 1, 1]
+        
+    #     up_samplings = self.decoder(h) #up_samplings size = [batchsize x gridsize, 1, 16, 16]
+    #     up_samplings = up_samplings.reshape(-1, sq_gridsize, sq_gridsize, 16, 16)
+    #     up_samplings = up_samplings.transpose(2, 3).contiguous() #up_samplings size = [batchsize, grid, 16, grid, 16]
+    #     up_samplings = up_samplings.reshape(-1, 1, 16 * sq_gridsize, 16 * sq_gridsize)
+        
+    #     # depths = up_samplings
+
+    #     depths = self.fine_tune(torch.cat([F.leaky_relu(up_samplings, 0.2), x], dim=1))
+    #     ## sigmoid or tanh
+
+    #     return torch.sigmoid(depths)
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.training_config["lr"])
+        optimier = torch.optim.Adam(self.parameters(), lr=self.training_config["lr"])
+        # return torch.optim.SGD(model.parameters(), lr=self.training_config["lr"],
+        #         momentum=self.training_config["momentum"], weight_decay=self.training_config["decay"])
+        # return torch.optim.Adam(self.parameters(), lr=self.training_config["lr"])
+        scheduler = torch.optim.lr_scheduler.StepLR(optimier, step_size = self.training_config["step"],
+                                                        gamma=self.training_config["gamma"])
+        return [optimier], [scheduler]
 
     def MSE_loss(self, predictions, groundtruths):
         return F.mse_loss(predictions, groundtruths)
@@ -155,7 +186,6 @@ class ViTDepthEstimation(LightningModule):
 
     def training_step(self, train_batch, batch_idx):
         x, groundtruths = train_batch['image'], train_batch['depth']
-       
         predictions = self.forward(x)
         loss = self.MSE_loss(predictions, groundtruths)
         self.log('train_loss', loss)
@@ -166,6 +196,23 @@ class ViTDepthEstimation(LightningModule):
         predictions = self.forward(x)
         loss = self.MSE_loss(predictions, groundtruths)
         self.log('val_loss', loss)
+        errors = compute_errors(groundtruths, predictions)
+        return {'groundtruths': groundtruths, 'predictions': predictions, 'errors': errors}
+
+    def validation_epoch_end(self, outs):
+        errors = (0, 0, 0, 0, 0, 0, 0)
+        n = 0
+        for batch in outs:
+            errors = tuple(map(lambda x, y: x + y, batch['errors'], errors))
+            n += 1
+        errors = tuple(map(lambda x: x/n, errors))
+        print(errors)
+        grid_images_inputs = make_grid(outs[0]['groundtruths'].cpu(), nrow=4)
+        self.logger.experiment.add_image("inputs images", grid_images_inputs, 0, dataformats="CHW")
+        save_image(grid_images_inputs, 'gt.png')
+        grid_images_predictions = make_grid(outs[0]['predictions'].cpu(), nrow=4)
+        self.logger.experiment.add_image("predicted images", grid_images_predictions, 0, dataformats="CHW")
+        save_image(grid_images_predictions, 'predict.png')
 
 
 if __name__ == '__main__':

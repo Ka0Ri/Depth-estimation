@@ -5,13 +5,17 @@ batch_size: 32
 
 training:
   lr: 0.0001
-  epochs: 1
+  step: 10
+  gamma: 0.1
+  epochs: 50
+  momentum: 0.9
+  decay: 0.0005
 
 ViT-model:
   ViTconfig: "ViT-B_16"
   pretrained: "checkpoints/ViT-B_16.npz"
   vis: False
-  fine_tune: True
+  fine_tune: False
   n_patches: 1
   Decoder:
     num_features: 768

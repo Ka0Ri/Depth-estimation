@@ -104,16 +104,17 @@ class ToTensor(object):
         image, depth = sample['image'], sample['depth']
 
         image = self.to_tensor(image)
+        depth = self.to_tensor(depth)
 
-        if self.is_test:
-            # depth normalize 0 - 1
-            # 1000으로 나누거나 곱하는 이유 : 실제 real meter
-            depth = self.to_tensor(depth).float() / 1000
-        else:
-            depth = self.to_tensor(depth).float() * 1000
+        # if self.is_test:
+        #     # depth normalize 0 - 1
+        #     # 1000으로 나누거나 곱하는 이유 : 실제 real meter
+        #     depth = self.to_tensor(depth).float() / 1000
+        # else:
+        #     depth = self.to_tensor(depth).float() * 1000
 
-        # put in expected range
-        depth = torch.clamp(depth, 10, 1000)
+        # # put in expected range
+        # depth = torch.clamp(depth, 10, 1000)
 
         return {'image': image, 'depth': depth}
 
@@ -159,7 +160,7 @@ def getNoTransform(size, is_test=False):
 
 def getDefaultTrainTransform(size, p):
     return transforms.Compose([
-        RandomHorizontalFlip(),
+        # RandomHorizontalFlip(),
         RandomChannelSwap(p),
         Resize(size),
         ToTensor()
