@@ -1,6 +1,6 @@
-model_name: 'ViT-depth estimation'
+model_name: 'ViT'
 device: 'cuda:0'
-batch_size: 32
+batch_size: 16
 
 
 training:
@@ -18,13 +18,24 @@ ViT-model:
   fine_tune: False
   n_patches: 1
   Decoder:
+    multiScale: True
+    base_grid: 16
     num_features: 768
     decoder_width: 1.0
 
+ResNet-model:
+  version: 101
+  pretrained: True
+  fine_tune: False
+  Decoder:
+    base_grid: 16
+    num_features: 1024
+    decoder_width: 0.75
  
 dataset:
   path: 'dataset/nyu_data.zip'
   n_used_data: 20000
+  n_test_data: 1000
   test_path: 'dataset/nyu_test.zip'
   input_shape: (224, 224, 3)
   channel_swap: 0.5

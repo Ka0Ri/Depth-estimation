@@ -3,6 +3,25 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 
+
+def colorize(value, vmin=10, vmax=1000, cmap='plasma'):
+    # normalize
+    vmin = value.min() if vmin is None else vmin
+    vmax = value.max() if vmax is None else vmax
+    if vmin!=vmax:
+        value = (value - vmin) / (vmax - vmin) # vmin..vmax
+    else:
+        # Avoid 0-division
+        value = value*0.
+    # squeeze last dim if it exists
+    #value = value.squeeze(axis=0)
+
+    cmapper = plt.cm.get_cmap(cmap)
+    value = cmapper(value) # (nxmx4)
+
+    img = value[:,:,:3]
+    return img
+
 def colored_depthmap(depth, d_min=None, d_max=None):
     if d_min is None:
         d_min = np.min(depth)
@@ -11,6 +30,14 @@ def colored_depthmap(depth, d_min=None, d_max=None):
     depth_relative = (depth - d_min) / (d_max - d_min)
     return 255 * plt.cm.jet(depth_relative)[:, :, :3]  # H, W, C
 
+def colored_batch_depthmap(batch, d_min = None, d_max=None):
+    batch = batch.cpu().numpy()
+    colored_batch = []
+    for i in range(batch.shape[0]):
+        depth = batch[i][0]
+        colored_batch.append(colorize(depth, vmin=d_min, vmax=d_max))
+    colored_batch = torch.stack([torch.tensor(colored) for colored in colored_batch], axis=0)
+    return colored_batch.permute(0, 3, 1, 2)
 
 def log10(x):
     """Convert a new tensor with the base-10 logarithm of the elements of x. """
