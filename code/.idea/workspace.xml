@@ -25,6 +25,13 @@
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
   </component>
@@ -38,6 +45,41 @@
   <component name="PropertiesComponent">
     <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
     <property name="WebServerToolWindowFactoryState" value="true" />
+    <property name="node.js.detected.package.eslint" value="true" />
+    <property name="node.js.detected.package.tslint" value="true" />
+    <property name="node.js.path.for.package.eslint" value="project" />
+    <property name="node.js.path.for.package.tslint" value="project" />
+    <property name="node.js.selected.package.eslint" value="(autodetect)" />
+    <property name="node.js.selected.package.tslint" value="(autodetect)" />
+  </component>
+  <component name="RunManager">
+    <configuration name="practice_vit" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="code" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/practice_vit.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.practice_vit" />
+      </list>
+    </recent_temporary>
   </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="TaskManager">
@@ -48,6 +90,13 @@
       <option name="presentableId" value="Default" />
       <updated>1620777713874</updated>
       <workItem from="1620777714918" duration="667000" />
+      <workItem from="1620804280313" duration="1979000" />
+      <workItem from="1621070646130" duration="609000" />
+      <workItem from="1621316377156" duration="21588000" />
+      <workItem from="1622450840464" duration="15984000" />
+      <workItem from="1623129346361" duration="10110000" />
+      <workItem from="1623305446783" duration="1189000" />
+      <workItem from="1624518689082" duration="18554000" />
     </task>
     <servers />
   </component>
@@ -64,5 +113,28 @@
         </entry>
       </map>
     </option>
+    <option name="oldMeFiltersMigrated" value="true" />
+  </component>
+  <component name="WindowStateProjectService">
+    <state x="3850" y="165" key="#com.intellij.execution.impl.EditConfigurationsDialog" timestamp="1623134520313">
+      <screen x="3440" y="0" width="1920" height="1040" />
+    </state>
+    <state x="3850" y="165" key="#com.intellij.execution.impl.EditConfigurationsDialog/0.0.2752.1112/3440.0.1920.1040@3440.0.1920.1040" timestamp="1623134520313" />
+    <state x="416" y="237" key="FileChooserDialogImpl" timestamp="1623142982753">
+      <screen x="0" y="0" width="2752" height="1112" />
+    </state>
+    <state x="416" y="237" key="FileChooserDialogImpl/0.0.2752.1112/3440.0.1920.1040@0.0.2752.1112" timestamp="1623142982753" />
+    <state x="3488" y="-29" width="1546" height="752" maximized="true" key="dock-window-1" timestamp="1623136590867">
+      <screen x="3440" y="0" width="1920" height="1040" />
+    </state>
+    <state x="1792" y="0" width="966" height="1118" key="dock-window-1/0.0.2752.1112/3440.0.1080.1880@0.0.2752.1112" timestamp="1621501697086" />
+    <state x="3488" y="-29" width="1546" height="752" maximized="true" key="dock-window-1/0.0.2752.1112/3440.0.1920.1040@3440.0.1920.1040" timestamp="1623136590867" />
+    <state x="548" y="225" width="566" height="668" key="ftp.server.browser" timestamp="1623143133888">
+      <screen x="0" y="0" width="2752" height="1112" />
+    </state>
+    <state x="548" y="225" width="566" height="668" key="ftp.server.browser/0.0.2752.1112/3440.0.1920.1040@0.0.2752.1112" timestamp="1623143133888" />
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/code$practice_vit.coverage" NAME="practice_vit Coverage Results" MODIFIED="1623134509788" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>

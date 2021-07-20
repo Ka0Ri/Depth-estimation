@@ -42,29 +42,6 @@ import ml_collections
 
 logger = logging.getLogger(__name__)
 
-ATTENTION_Q = "MultiHeadDotProductAttention_1/query"
-ATTENTION_K = "MultiHeadDotProductAttention_1/key"
-ATTENTION_V = "MultiHeadDotProductAttention_1/value"
-ATTENTION_OUT = "MultiHeadDotProductAttention_1/out"
-FC_0 = "MlpBlock_3/Dense_0"
-FC_1 = "MlpBlock_3/Dense_1"
-ATTENTION_NORM = "LayerNorm_0"
-MLP_NORM = "LayerNorm_2"
-
-
-def np2th(weights, conv=False):
-    """Possibly convert HWIO to OIHW."""
-    if conv:
-        weights = weights.transpose([3, 2, 0, 1])
-    return torch.from_numpy(weights)
-
-
-def swish(x):
-    return x * torch.sigmoid(x)
-
-ACT2FN = {"gelu": torch.nn.functional.gelu, "relu": torch.nn.functional.relu, "swish": swish}
-
-
 
 def get_testing():
     """Returns a minimal configuration for testing."""
@@ -166,6 +143,28 @@ CONFIGS = {
 }
 
 
+ATTENTION_Q = "MultiHeadDotProductAttention_1/query"
+ATTENTION_K = "MultiHeadDotProductAttention_1/key"
+ATTENTION_V = "MultiHeadDotProductAttention_1/value"
+ATTENTION_OUT = "MultiHeadDotProductAttention_1/out"
+FC_0 = "MlpBlock_3/Dense_0"
+FC_1 = "MlpBlock_3/Dense_1"
+ATTENTION_NORM = "LayerNorm_0"
+MLP_NORM = "LayerNorm_2"
+
+
+def np2th(weights, conv=False):
+    """Possibly convert HWIO to OIHW."""
+    if conv:
+        weights = weights.transpose([3, 2, 0, 1])
+    return torch.from_numpy(weights)
+
+
+def swish(x):
+    return x * torch.sigmoid(x)
+
+
+ACT2FN = {"gelu": torch.nn.functional.gelu, "relu": torch.nn.functional.relu, "swish": swish}
 
 
 class Attention(nn.Module):
@@ -395,8 +394,6 @@ class VisionTransformer(nn.Module):
         x, attn_weights = self.transformer(x)
         logits = self.head(x[:, 0])
 
-        #contrast loss를 사용하지 않음
-        #
         if labels is not None:
             loss_fct = CrossEntropyLoss()
             loss = loss_fct(logits.view(-1, self.num_classes), labels.view(-1))

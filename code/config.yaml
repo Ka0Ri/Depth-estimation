@@ -23,7 +23,7 @@ ViT-model:
     num_features: 768
     decoder_width: 1.0
 
-ResNet-model:
+ResNet-model:0
   version: 101
   pretrained: True
   fine_tune: False
